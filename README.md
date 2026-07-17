@@ -25,12 +25,9 @@ cron ─▶ GET {PARAAT_API_BASE}/api/health/agents   (X-Health-Token)
 1. **Lightweight pings** (every 5 min) — reachability of the gateway, providers, RAG & MCP endpoints. Cheap, no tokens.
 2. **Real end-to-end test** (`RUN_SYNTHETIC`, runs **once daily** on the `SYNTHETIC_CRON` trigger) — the worker calls `POST /api/health/synthetic`, which logs in as a real user and **sends actual prompts through the live chat pipeline**, waiting for real answers. For LLM agents the answer is produced by the queued Horizon job, so this catches the dangerous case a ping misses: **site up + users logged in, but chat silently broken** (queue/Horizon down, provider misconfigured, streaming stalled). It runs only on the daily cron to keep token spend to ~a dollar or two a month; a failed real test is tagged `⚠️REAL-TEST` in alerts. Trigger on demand any time with `GET /?synthetic=1`.
 
-   Backend `.env` for the real test:
-   ```
-   HEALTH_SYNTHETIC_ENABLED=true
-   HEALTH_CHECK_USER_EMAIL=<existing user with a company + agent access>
-   # optional tuning: HEALTH_SYNTHETIC_TIMEOUT, HEALTH_MODEL_OPENAI, HEALTH_MODEL_ANTHROPIC, ...
-   ```
+   The real test is configured on the **backend** in the DB (no `.env` needed) —
+   see **Settings → Health Check** (super-admin): enable toggle, test-user email,
+   and the shared token (viewable/copyable there).
 
 Status classification:
 
@@ -40,50 +37,52 @@ Status classification:
 | `degraded` | 401 / 403 (auth) or 429 (rate limited) — reachable but broken |
 | `down`     | 5xx, timeout, or network error (retried once first)          |
 
-## The backend side (already added to paraat-backend)
+## The backend side (added to paraat-backend)
 
-- `GET /api/health/agents` → `HealthCheckController` (guarded by `health.token` middleware)
-- Set the shared secret in the Laravel `.env`:
+- `GET /api/health/agents` and `POST /api/health/synthetic` → `HealthCheckController`, guarded by the `health.token` middleware.
+- Config lives in the **database** (Spatie Settings), managed at **Settings → Health Check** (super-admin): shared token, synthetic on/off, and the test-user email. No `.env` needed. (Run `php artisan migrate` once to create the settings.)
+- No provider API keys are ever returned by these endpoints — they only say *what* to check.
 
-  ```
-  HEALTH_CHECK_TOKEN=<long-random-string>
-  ```
-  Then `php artisan config:clear`.
+> **Deploy order:** the endpoints only exist once the backend change is merged and deployed to that environment. Point `PARAAT_API_BASE` at an environment **after** it has the code, or every check returns 404.
 
-No provider API keys are ever returned by this endpoint — it only says *what* to check.
+## Environment variables
+
+> **This worker has its own isolated environment** — it does **not** inherit the Paraat backend's `.env` or the `paraatmaster` worker's secrets. Every value below must be set on *this* worker (Cloudflare dashboard → your Worker → Settings → Variables, or `wrangler secret put`).
+
+| Name | Kind | Required | Purpose |
+|------|------|----------|---------|
+| `PARAAT_API_BASE` | var | **yes** | Your backend URL, e.g. `https://dev.paraat.ai`. **Change the placeholder.** |
+| `PARAAT_HEALTH_TOKEN` | secret | **yes** | Must match the backend's health-check token (Settings → Health Check). |
+| `CF_AIG_TOKEN` | secret | for LLM pings | CF AI Gateway token — same as backend's `CF_AIGETWAY_AIG_AUTH_MAIN`. Enables the provider `/v1/models` pings. |
+| `ALERT_WEBHOOK_URL` | secret | recommended | Slack/Discord incoming webhook. **Blank = no alerts fire.** |
+| `CF_WORKER_CASE_LAW_API_KEY` | secret | optional | Only authenticates the Case Law ping. **Leave blank** — it's still pinged for reachability. |
+| `STATUS_TOKEN` | secret | optional | Password for the status URL (`GET /`) and on-demand runs (`/?synthetic=1`). Blank = anyone with the URL can trigger a paid run, so setting a random value is recommended. |
+| `RUN_SYNTHETIC` | var | default `true` | Master switch for the real test. |
+| `SYNTHETIC_CRON` | var | default `0 6 * * *` | Which cron trigger runs the real test (keep in sync with `[triggers]`). |
+| `SYNTHETIC_TIMEOUT_MS` | var | default `150000` | Max wait for the synthetic run (MCP agents are slow). |
+| `ENVIRONMENT` | var | optional | Label shown in alerts, e.g. `production`. |
 
 ## Setup
 
+**Option A — Cloudflare dashboard (deploy from Git):** connect this repo, then fill the variables above in the setup screen. Set `PARAAT_API_BASE` to your real backend URL; leave the optional secrets blank if you don't need them.
+
+**Option B — CLI:**
 ```bash
 cd paraat-health-worker
 npm install
+# set PARAAT_API_BASE (+ cron) in wrangler.toml, then:
+wrangler secret put PARAAT_HEALTH_TOKEN
+wrangler secret put CF_AIG_TOKEN
+wrangler secret put ALERT_WEBHOOK_URL      # optional
+wrangler secret put STATUS_TOKEN           # optional
+npm run deploy
 ```
 
-1. Edit `wrangler.toml` → set `PARAAT_API_BASE` to your backend URL and adjust the cron.
-
-2. Set secrets (production):
-
-   ```bash
-   wrangler secret put PARAAT_HEALTH_TOKEN          # == HEALTH_CHECK_TOKEN in Laravel .env
-   wrangler secret put CF_AIG_TOKEN                 # == CF_AIGETWAY_AIG_AUTH_MAIN in Laravel .env
-   wrangler secret put ALERT_WEBHOOK_URL            # optional: Slack/Discord/webhook
-   wrangler secret put CF_WORKER_CASE_LAW_API_KEY   # optional: for protected RAG endpoints
-   wrangler secret put STATUS_TOKEN                 # optional: protects the GET / status view
-   ```
-
-3. (Recommended) Enable change-based alerts + status caching with KV:
-
-   ```bash
-   wrangler kv namespace create HEALTH_STATE
-   ```
-   Paste the returned `id` into the `[[kv_namespaces]]` block in `wrangler.toml` and uncomment it.
-   Without KV, the worker alerts on **every** run where something is down (noisier).
-
-4. Deploy:
-
-   ```bash
-   npm run deploy
-   ```
+**(Recommended) KV for change-based alerts + status view:**
+```bash
+wrangler kv namespace create HEALTH_STATE
+```
+Paste the returned `id` into the `[[kv_namespaces]]` block in `wrangler.toml` and uncomment it. Without KV, the worker alerts on **every** run where something is down (noisier).
 
 ## Local development
 
