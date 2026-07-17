@@ -387,20 +387,31 @@ async function sendMattermostPost(env, text) {
   }
 }
 
+// Sanitize a value for a markdown table cell (escape pipes, flatten newlines).
+function cell(s) {
+  return String(s ?? '—').replace(/\|/g, '\\|').replace(/\s*\n+\s*/g, ' ').slice(0, 140) || '—';
+}
+
 function formatAlert(newlyBad, recovered, env) {
   const env_ = env.ENVIRONMENT ? ` [${env.ENVIRONMENT}]` : '';
-  // **bold** renders in Mattermost + Discord (Slack tolerates it too).
-  const lines = [`🩺 **Paraat endpoint health**${env_}`];
+  const rows = [];
   for (const r of newlyBad) {
     const emoji = r.status === 'down' ? '🔴' : '🟠';
     // A failed REAL prompt test is the serious one — chat is actually broken.
-    const tag = r.test === 'synthetic' ? ' ⚠️REAL-TEST' : '';
-    lines.push(`${emoji} DOWN${tag}: **${r.name}** (${r.provider}/${r.kind}) — ${r.http_status ?? 'no response'} · ${r.note}`);
+    const tag = r.test === 'synthetic' ? ' ⚠️' : '';
+    rows.push(`| ${emoji}${tag} | ${cell(r.name)} | ${cell(r.provider + '/' + r.kind)} | ${cell((r.http_status ?? '—') + ' · ' + r.note)} |`);
   }
   for (const r of recovered) {
-    lines.push(`✅ RECOVERED: **${r.name}** (${r.provider}/${r.kind}) — ${r.latency_ms}ms`);
+    rows.push(`| ✅ | ${cell(r.name)} | ${cell(r.provider + '/' + r.kind)} | ${cell('recovered · ' + r.latency_ms + 'ms')} |`);
   }
-  return lines.join('\n');
+  // Markdown table renders in Mattermost, Slack, and Discord.
+  return [
+    `🩺 **Paraat endpoint health**${env_}`,
+    '',
+    '| | Agent | Type | Detail |',
+    '|:--:|---|---|---|',
+    ...rows,
+  ].join('\n');
 }
 
 function formatSourceFailure(env, err) {
