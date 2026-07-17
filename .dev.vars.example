@@ -1,0 +1,20 @@
+# Copy to `.dev.vars` for local `wrangler dev`. In production these are set as
+# secrets via `wrangler secret put <NAME>` (do NOT commit real values).
+
+# Shared secret guarding GET /api/health/agents on the Paraat backend.
+# Must match HEALTH_CHECK_TOKEN in the Laravel .env.
+PARAAT_HEALTH_TOKEN="change-me-long-random"
+
+# Cloudflare AI Gateway auth token — same value as CF_AIGETWAY_AIG_AUTH_MAIN
+# in the Laravel .env. Sent verbatim as the cf-aig-authorization header.
+CF_AIG_TOKEN="change-me"
+
+# Optional: key for protected RAG endpoints (e.g. Case Law). Same as
+# CF_WORKER_CASE_LAW_API_KEY in the Laravel .env.
+CF_WORKER_CASE_LAW_API_KEY=""
+
+# Optional: Slack / Discord / generic incoming-webhook URL for alerts.
+ALERT_WEBHOOK_URL=""
+
+# Optional: token required to read the on-demand status endpoint (GET /).
+STATUS_TOKEN=""

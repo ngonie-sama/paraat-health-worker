@@ -1,0 +1,29 @@
+name = "paraat-health-worker"
+main = "src/index.js"
+compatibility_date = "2025-07-01"
+
+# Runs the health sweep on a schedule. Adjust as needed.
+# "*/5 * * * *" = every 5 minutes.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Non-secret vars. Secrets are set with `wrangler secret put <NAME>` (see README).
+[vars]
+PARAAT_API_BASE = "https://your-paraat-backend.example.com"
+ENVIRONMENT = "production"
+
+# Real end-to-end user test (sends actual prompts through the live pipeline).
+# Set to "false" to disable. SYNTHETIC_EVERY_N_RUNS throttles it (needs KV) so
+# the token-spending test runs less often than the cheap pings — e.g. "3" = every
+# 3rd cron tick. SYNTHETIC_TIMEOUT_MS must exceed the backend's HEALTH_SYNTHETIC_TIMEOUT.
+RUN_SYNTHETIC = "true"
+SYNTHETIC_EVERY_N_RUNS = "1"
+SYNTHETIC_TIMEOUT_MS = "75000"
+
+# Optional: KV namespace enables change-based alerts (only alert on down/recovery
+# transitions instead of every run) and powers the /status last-run view.
+# Create it once:  wrangler kv namespace create HEALTH_STATE
+# then paste the returned id below and uncomment.
+# [[kv_namespaces]]
+# binding = "HEALTH_STATE"
+# id = "REPLACE_WITH_KV_NAMESPACE_ID"
