@@ -3,8 +3,7 @@
 A Cloudflare Worker that monitors the health of every AI endpoint Paraat depends on:
 
 - **LLM providers** (OpenAI, Anthropic/Claude, DeepSeek, Google AI Studio/Gemini, Grok, and any others in the DB) — probed **through your Cloudflare AI Gateway** on cheap model-list endpoints, so it tests the exact path the chat pipeline uses **without spending any tokens**.
-- **RAG / custom agents** (e.g. Case Law) and DB-driven MCP agents (`pinpoint_vault`, `n8n_db`, `gitlab_mcp`, `mattermost`, `thinkstein`) — probed directly at their `ai_agents.endpoint` URL.
-- **Hardcoded MCP agents** (School Online, Land Claims Court, eGazettes, Vecflow) — their worker URLs live in the PHP service classes, not the DB, so they are registered in `config/services.php` under `health_check.mcp_agents` and probed directly. Each carries an `in_use` flag = whether an active `ai_agents` row exists for it.
+- **RAG / MCP / custom-endpoint agents** (Case Law, School Online, eGazettes, PinpointVault, etc.) — probed directly at their `ai_agents.endpoint` URL. The list is sourced **entirely from the `ai_agents` table**, so any active agent with a valid endpoint is covered automatically. Junk/invalid endpoint values (non-http, bare hostnames) are skipped so a bad DB row can't produce a fake-green result.
 
 The target list is pulled **live** from the Paraat backend, so new agents/providers are picked up automatically — nothing to redeploy when the DB changes.
 
