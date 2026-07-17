@@ -54,7 +54,9 @@ Status classification:
 | `PARAAT_API_BASE` | var | **yes** | Your backend URL, e.g. `https://dev.paraat.ai`. **Change the placeholder.** |
 | `PARAAT_HEALTH_TOKEN` | secret | **yes** | Must match the backend's health-check token (Settings → Health Check). |
 | `CF_AIG_TOKEN` | secret | for LLM pings | CF AI Gateway token — same as backend's `CF_AIGETWAY_AIG_AUTH_MAIN`. Enables the provider `/v1/models` pings. |
-| `ALERT_WEBHOOK_URL` | secret | recommended | Slack/Discord incoming webhook. **Blank = no alerts fire.** |
+| `ALERT_WEBHOOK_URL` | secret | one of these | Incoming webhook (Mattermost/Slack/Discord/Google Chat). **Blank + no bot = no alerts.** |
+| `MATTERMOST_TOKEN` | secret | alt to webhook | Post as the Mattermost bot via the REST API instead of a webhook. If set with `MATTERMOST_CHANNEL`, this is used and `ALERT_WEBHOOK_URL` is ignored. |
+| `MATTERMOST_URL` / `MATTERMOST_TEAM` / `MATTERMOST_CHANNEL` | var | with bot token | Server (`https://matter.elula.cloud`), team, and channel (id, or name + team) for bot posts. |
 | `CF_WORKER_CASE_LAW_API_KEY` | secret | optional | Only authenticates the Case Law ping. **Leave blank** — it's still pinged for reachability. |
 | `STATUS_TOKEN` | secret | optional | Password for the status URL (`GET /`) and on-demand runs (`/?synthetic=1`). Blank = anyone with the URL can trigger a paid run, so setting a random value is recommended. |
 | `RUN_SYNTHETIC` | var | default `true` | Master switch for the real test. |
@@ -98,8 +100,12 @@ npm run dev
 
 ## Alerts
 
-Set `ALERT_WEBHOOK_URL` to an incoming webhook. The payload is `{ text, content }` with `**bold**` markdown, which works out of the box with **Mattermost**, **Slack**, **Discord**, and **Google Chat**.
+Two ways to deliver alerts — pick one:
 
-- **Mattermost**: enable incoming webhooks (System Console → Integrations), then *Integrations → Incoming Webhooks → Add* and copy the `https://<server>/hooks/…` URL.
-- **Microsoft Teams** needs a different payload (Adaptive Card) — adapt `sendAlert()` in `src/index.js`.
-- For **email**, replace `sendAlert()` with a call to your mail API (Resend/SendGrid/MailChannels) — it's a single isolated function.
+**A) Mattermost bot (reuses your existing bot — no webhook needed)**
+Set `MATTERMOST_TOKEN` (secret) plus `MATTERMOST_URL`, `MATTERMOST_TEAM`, `MATTERMOST_CHANNEL` (vars). The worker posts via `POST /api/v4/posts` as the bot. `MATTERMOST_CHANNEL` can be a 26-char channel id or a channel name (resolved via team). The bot must be a member of the channel.
+
+**B) Incoming webhook**
+Set `ALERT_WEBHOOK_URL` to an incoming webhook. The payload is `{ text, content }` with `**bold**` markdown, which works with **Mattermost**, **Slack**, **Discord**, and **Google Chat**. For Mattermost: enable incoming webhooks (System Console → Integrations), then *Integrations → Incoming Webhooks → Add* and copy the `https://<server>/hooks/…` URL.
+
+If both are configured, the bot (A) wins. **Microsoft Teams** needs a different payload (Adaptive Card) — adapt `sendAlert()`. For **email**, replace `sendAlert()` with a mail-API call — it's a single isolated function.

@@ -13,8 +13,11 @@ CF_AIG_TOKEN="change-me"
 # CF_WORKER_CASE_LAW_API_KEY in the Laravel .env.
 CF_WORKER_CASE_LAW_API_KEY=""
 
-# Optional: Slack / Discord / generic incoming-webhook URL for alerts.
+# Alerts — pick ONE:
+# (a) generic incoming webhook (Mattermost/Slack/Discord/Google Chat):
 ALERT_WEBHOOK_URL=""
+# (b) post as the Mattermost bot via the REST API (URL/TEAM/CHANNEL are in wrangler.toml):
+MATTERMOST_TOKEN=""
 
 # Optional: token required to read the on-demand status endpoint (GET /).
 STATUS_TOKEN=""

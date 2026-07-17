@@ -29,6 +29,15 @@ RUN_SYNTHETIC = "true"
 SYNTHETIC_CRON = "0 6 * * *"
 SYNTHETIC_TIMEOUT_MS = "150000"
 
+# Alerts. Either (a) set ALERT_WEBHOOK_URL to an incoming webhook, OR (b) post as
+# the Mattermost bot below (reuses your existing bot token). If MATTERMOST_TOKEN +
+# MATTERMOST_CHANNEL are set, the bot API is used and ALERT_WEBHOOK_URL is ignored.
+# MATTERMOST_CHANNEL may be a 26-char channel id or a channel name (needs MATTERMOST_TEAM).
+# Set MATTERMOST_TOKEN with `wrangler secret put MATTERMOST_TOKEN` (don't commit it).
+MATTERMOST_URL = "https://matter.elula.cloud"
+MATTERMOST_TEAM = "elula-online"
+MATTERMOST_CHANNEL = "town-square"
+
 # Optional: KV namespace enables change-based alerts (only alert on down/recovery
 # transitions instead of every run) and powers the /status last-run view.
 # Create it once:  wrangler kv namespace create HEALTH_STATE

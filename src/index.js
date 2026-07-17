@@ -328,14 +328,57 @@ async function handleAlerts(env, results) {
 }
 
 async function sendAlert(env, text) {
+  // Prefer posting as the Mattermost bot (reuses the existing bot token) when
+  // configured; otherwise fall back to a generic incoming webhook.
+  if (env.MATTERMOST_TOKEN && env.MATTERMOST_CHANNEL) {
+    return sendMattermostPost(env, text);
+  }
   if (!env.ALERT_WEBHOOK_URL) return;
   try {
     await withTimeout((signal) =>
       fetch(env.ALERT_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Slack- and Discord-compatible payload.
+        // Slack-/Discord-/Mattermost-webhook-compatible payload.
         body: JSON.stringify({ text, content: text }),
+        signal,
+      })
+    );
+  } catch (_) {
+    // Never let alert delivery failure break the check run.
+  }
+}
+
+/**
+ * Post an alert as the Mattermost bot via the REST API (POST /api/v4/posts).
+ * MATTERMOST_CHANNEL may be a 26-char channel id (used directly) or a channel
+ * name (resolved via MATTERMOST_TEAM). The bot must be a member of the channel.
+ */
+async function sendMattermostPost(env, text) {
+  try {
+    const base = trimSlash(env.MATTERMOST_URL || '').replace(/\/api\/v4$/, '');
+    const api = `${base}/api/v4`;
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.MATTERMOST_TOKEN}`,
+    };
+
+    let channelId = env.MATTERMOST_CHANNEL;
+    if (!/^[a-z0-9]{26}$/i.test(channelId) && env.MATTERMOST_TEAM) {
+      const r = await withTimeout((signal) =>
+        fetch(
+          `${api}/teams/name/${encodeURIComponent(env.MATTERMOST_TEAM)}/channels/name/${encodeURIComponent(channelId)}`,
+          { headers, signal }
+        )
+      );
+      if (r.ok) channelId = (await r.json()).id;
+    }
+
+    await withTimeout((signal) =>
+      fetch(`${api}/posts`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ channel_id: channelId, message: text }),
         signal,
       })
     );
