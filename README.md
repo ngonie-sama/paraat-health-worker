@@ -98,4 +98,8 @@ npm run dev
 
 ## Alerts
 
-Set `ALERT_WEBHOOK_URL` to a Slack or Discord incoming-webhook (the payload includes both `text` and `content` for compatibility). To use email instead, replace `sendAlert()` in `src/index.js` with a call to your mail API (e.g. Resend/SendGrid/MailChannels) — it's a single isolated function.
+Set `ALERT_WEBHOOK_URL` to an incoming webhook. The payload is `{ text, content }` with `**bold**` markdown, which works out of the box with **Mattermost**, **Slack**, **Discord**, and **Google Chat**.
+
+- **Mattermost**: enable incoming webhooks (System Console → Integrations), then *Integrations → Incoming Webhooks → Add* and copy the `https://<server>/hooks/…` URL.
+- **Microsoft Teams** needs a different payload (Adaptive Card) — adapt `sendAlert()` in `src/index.js`.
+- For **email**, replace `sendAlert()` with a call to your mail API (Resend/SendGrid/MailChannels) — it's a single isolated function.

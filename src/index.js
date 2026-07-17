@@ -346,22 +346,23 @@ async function sendAlert(env, text) {
 
 function formatAlert(newlyBad, recovered, env) {
   const env_ = env.ENVIRONMENT ? ` [${env.ENVIRONMENT}]` : '';
-  const lines = [`🩺 *Paraat endpoint health*${env_}`];
+  // **bold** renders in Mattermost + Discord (Slack tolerates it too).
+  const lines = [`🩺 **Paraat endpoint health**${env_}`];
   for (const r of newlyBad) {
     const emoji = r.status === 'down' ? '🔴' : '🟠';
     // A failed REAL prompt test is the serious one — chat is actually broken.
     const tag = r.test === 'synthetic' ? ' ⚠️REAL-TEST' : '';
-    lines.push(`${emoji} DOWN${tag}: *${r.name}* (${r.provider}/${r.kind}) — ${r.http_status ?? 'no response'} · ${r.note}`);
+    lines.push(`${emoji} DOWN${tag}: **${r.name}** (${r.provider}/${r.kind}) — ${r.http_status ?? 'no response'} · ${r.note}`);
   }
   for (const r of recovered) {
-    lines.push(`✅ RECOVERED: *${r.name}* (${r.provider}/${r.kind}) — ${r.latency_ms}ms`);
+    lines.push(`✅ RECOVERED: **${r.name}** (${r.provider}/${r.kind}) — ${r.latency_ms}ms`);
   }
   return lines.join('\n');
 }
 
 function formatSourceFailure(env, err) {
   const env_ = env.ENVIRONMENT ? ` [${env.ENVIRONMENT}]` : '';
-  return `🔴 *Paraat endpoint health*${env_}\nCould not reach health-source (${trimSlash(env.PARAAT_API_BASE)}/api/health/agents): ${err.message}`;
+  return `🔴 **Paraat endpoint health**${env_}\nCould not reach health-source (${trimSlash(env.PARAAT_API_BASE)}/api/health/agents): ${err.message}`;
 }
 
 // ── State persistence for the status view ────────────────────────────────────
