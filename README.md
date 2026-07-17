@@ -22,8 +22,8 @@ cron ─▶ GET {PARAAT_API_BASE}/api/health/agents   (X-Health-Token)
 
 ### Two layers of checking
 
-1. **Lightweight pings** (every run) — reachability of the gateway, providers, RAG & MCP endpoints. Cheap, no tokens.
-2. **Real end-to-end test** (`RUN_SYNTHETIC`) — the worker calls `POST /api/health/synthetic`, which logs in as a real user and **sends actual prompts through the live chat pipeline**, waiting for real answers. For LLM agents the answer is produced by the queued Horizon job, so this catches the dangerous case a ping misses: **site up + users logged in, but chat silently broken** (queue/Horizon down, provider misconfigured, streaming stalled). Throttle it with `SYNTHETIC_EVERY_N_RUNS` to control token spend; a failed real test is tagged `⚠️REAL-TEST` in alerts.
+1. **Lightweight pings** (every 5 min) — reachability of the gateway, providers, RAG & MCP endpoints. Cheap, no tokens.
+2. **Real end-to-end test** (`RUN_SYNTHETIC`, runs **once daily** on the `SYNTHETIC_CRON` trigger) — the worker calls `POST /api/health/synthetic`, which logs in as a real user and **sends actual prompts through the live chat pipeline**, waiting for real answers. For LLM agents the answer is produced by the queued Horizon job, so this catches the dangerous case a ping misses: **site up + users logged in, but chat silently broken** (queue/Horizon down, provider misconfigured, streaming stalled). It runs only on the daily cron to keep token spend to ~a dollar or two a month; a failed real test is tagged `⚠️REAL-TEST` in alerts. Trigger on demand any time with `GET /?synthetic=1`.
 
    Backend `.env` for the real test:
    ```

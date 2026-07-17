@@ -18,7 +18,10 @@ const RETRY_DELAY_MS = 1_500;
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runChecks(env, { alert: true }));
+    // Two cron triggers: the frequent one runs cheap pings only; the daily one
+    // (SYNTHETIC_CRON) additionally runs the real, token-spending synthetic test.
+    const synthetic = String(env.RUN_SYNTHETIC) !== 'false' && event.cron === (env.SYNTHETIC_CRON || '0 6 * * *');
+    ctx.waitUntil(runChecks(env, { alert: true, synthetic }));
   },
 
   async fetch(request, env) {
@@ -32,7 +35,11 @@ export default {
       }
     }
 
-    const result = await runChecks(env, { alert: url.searchParams.get('alert') === '1' });
+    // On-demand: add ?synthetic=1 to also run the real prompt test.
+    const result = await runChecks(env, {
+      alert: url.searchParams.get('alert') === '1',
+      synthetic: url.searchParams.get('synthetic') === '1',
+    });
     const anyDown = result.summary.down > 0 || result.summary.degraded > 0;
     return json(result, anyDown ? 503 : 200);
   },
@@ -40,7 +47,7 @@ export default {
 
 // ── Core ─────────────────────────────────────────────────────────────────────
 
-async function runChecks(env, { alert }) {
+async function runChecks(env, { alert, synthetic = false }) {
   const startedAt = new Date().toISOString();
 
   let manifest;
@@ -69,8 +76,9 @@ async function runChecks(env, { alert }) {
 
   const pingResults = (await Promise.all(probes.map((p) => runProbe(p)))).map((r) => ({ ...r, test: 'ping' }));
 
-  // Real end-to-end user test — the thing a ping can't prove. Optional + throttled.
-  const syntheticResults = await maybeRunSynthetic(env);
+  // Real end-to-end user test — the thing a ping can't prove. Runs only on the
+  // daily cron (or on-demand via ?synthetic=1).
+  const syntheticResults = synthetic ? await runSynthetic(env) : [];
 
   const results = [...pingResults, ...syntheticResults];
 
@@ -101,22 +109,12 @@ async function runChecks(env, { alert }) {
 
 /**
  * Triggers the backend synthetic endpoint, which sends real prompts through the
- * live chat pipeline and waits for real answers. Throttled via SYNTHETIC_EVERY_N_RUNS
- * (needs KV) to control token spend. Returns worker-shaped result rows.
+ * live chat pipeline and waits for real answers. Invoked only on the daily cron
+ * (or on-demand), so no counter/KV throttle is needed. Returns worker-shaped rows.
  */
-async function maybeRunSynthetic(env) {
-  if (String(env.RUN_SYNTHETIC) === 'false') return [];
-
-  // Throttle: only run every Nth invocation when KV is available to keep a counter.
-  const everyN = Math.max(1, parseInt(env.SYNTHETIC_EVERY_N_RUNS || '1', 10));
-  if (everyN > 1 && env.HEALTH_STATE) {
-    const n = ((parseInt((await env.HEALTH_STATE.get('synthetic_counter')) || '0', 10)) + 1) % everyN;
-    await env.HEALTH_STATE.put('synthetic_counter', String(n));
-    if (n !== 0) return [];
-  }
-
+async function runSynthetic(env) {
   const url = `${trimSlash(env.PARAAT_API_BASE)}/api/health/synthetic`;
-  const timeoutMs = Math.max(20_000, parseInt(env.SYNTHETIC_TIMEOUT_MS || '75000', 10));
+  const timeoutMs = Math.max(20_000, parseInt(env.SYNTHETIC_TIMEOUT_MS || '150000', 10));
 
   try {
     const res = await withTimeout(

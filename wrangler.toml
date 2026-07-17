@@ -2,10 +2,12 @@ name = "paraat-health-worker"
 main = "src/index.js"
 compatibility_date = "2025-07-01"
 
-# Runs the health sweep on a schedule. Adjust as needed.
-# "*/5 * * * *" = every 5 minutes.
+# Two schedules:
+#   "*/5 * * * *" — cheap reachability pings every 5 minutes (no tokens).
+#   "0 6 * * *"   — the daily real synthetic prompt test (see SYNTHETIC_CRON below).
+# Both are UTC. Change "0 6 * * *" to move the daily run; keep SYNTHETIC_CRON in sync.
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/5 * * * *", "0 6 * * *"]
 
 # Non-secret vars. (For production, move PARAAT_HEALTH_TOKEN + CF_AIG_TOKEN to
 # `wrangler secret put <NAME>` — a secret overrides the var of the same name.)
@@ -19,14 +21,12 @@ ENVIRONMENT = "production"
 PARAAT_HEALTH_TOKEN = "paraat-health-elula-2026"
 
 # Real end-to-end user test (sends actual prompts through the live pipeline).
-# Set to "false" to disable. SYNTHETIC_EVERY_N_RUNS throttles it (needs KV) so
-# the token-spending test runs less often than the cheap pings — "12" = hourly
-# at a 5-min cron. Keeps LLM + MCP token/worker cost to ~a dollar or two a month
-# while the free reachability pings still run every 5 min. A full run can take
-# 60-120s (MCP agents are slow synchronous calls), so SYNTHETIC_TIMEOUT_MS must
-# exceed the backend's worst-case run time.
+# Runs ONLY on the cron matching SYNTHETIC_CRON (the daily one) — the 5-min cron
+# does pings only. Set RUN_SYNTHETIC="false" to disable entirely. Cost stays to
+# roughly a dollar or two a month at one run/day. A full run can take 60-120s
+# (MCP agents are slow synchronous calls), so SYNTHETIC_TIMEOUT_MS gives headroom.
 RUN_SYNTHETIC = "true"
-SYNTHETIC_EVERY_N_RUNS = "12"
+SYNTHETIC_CRON = "0 6 * * *"
 SYNTHETIC_TIMEOUT_MS = "150000"
 
 # Optional: KV namespace enables change-based alerts (only alert on down/recovery
