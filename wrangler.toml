@@ -7,10 +7,16 @@ compatibility_date = "2025-07-01"
 [triggers]
 crons = ["*/5 * * * *"]
 
-# Non-secret vars. Secrets are set with `wrangler secret put <NAME>` (see README).
+# Non-secret vars. (For production, move PARAAT_HEALTH_TOKEN + CF_AIG_TOKEN to
+# `wrangler secret put <NAME>` — a secret overrides the var of the same name.)
 [vars]
 PARAAT_API_BASE = "https://your-paraat-backend.example.com"
 ENVIRONMENT = "production"
+
+# Shared secret guarding the backend health endpoints (X-Health-Token). Must match
+# the backend's health_check.token setting / HEALTH_CHECK_TOKEN. Hardcoded here for
+# now to get things running with zero setup; rotate + move to a secret later.
+PARAAT_HEALTH_TOKEN = "paraat-health-elula-2026"
 
 # Real end-to-end user test (sends actual prompts through the live pipeline).
 # Set to "false" to disable. SYNTHETIC_EVERY_N_RUNS throttles it (needs KV) so
