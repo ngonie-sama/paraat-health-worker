@@ -20,11 +20,13 @@ PARAAT_HEALTH_TOKEN = "paraat-health-elula-2026"
 
 # Real end-to-end user test (sends actual prompts through the live pipeline).
 # Set to "false" to disable. SYNTHETIC_EVERY_N_RUNS throttles it (needs KV) so
-# the token-spending test runs less often than the cheap pings — e.g. "3" = every
-# 3rd cron tick. SYNTHETIC_TIMEOUT_MS must exceed the backend's HEALTH_SYNTHETIC_TIMEOUT.
+# the token-spending test runs less often than the cheap pings — recommended
+# "6" (every 30 min at a 5-min cron) since a full run can take 60-120s because
+# MCP agents are slow synchronous calls. SYNTHETIC_TIMEOUT_MS must exceed the
+# backend's worst-case run time.
 RUN_SYNTHETIC = "true"
-SYNTHETIC_EVERY_N_RUNS = "1"
-SYNTHETIC_TIMEOUT_MS = "75000"
+SYNTHETIC_EVERY_N_RUNS = "6"
+SYNTHETIC_TIMEOUT_MS = "150000"
 
 # Optional: KV namespace enables change-based alerts (only alert on down/recovery
 # transitions instead of every run) and powers the /status last-run view.
