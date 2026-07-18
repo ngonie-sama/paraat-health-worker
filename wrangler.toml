@@ -15,10 +15,17 @@ crons = ["*/5 * * * *", "0 6 * * *"]
 # Non-secret vars — edit here + push (auto-deploys). Real secrets
 # (CF_AIG_TOKEN, MATTERMOST_TOKEN) stay as `wrangler secret put`.
 [vars]
-# Backend this worker monitors. Change to https://console.paraat.ai + ENVIRONMENT
-# = "production" for live, then commit/push.
+# Backend this worker monitors. To switch environments, comment out the ACTIVE
+# pair and uncomment the other, then commit + push (auto-deploys). Only ONE pair
+# should be uncommented at a time.
+#
+# --- DEV / UAT (active) ---
 PARAAT_API_BASE = "https://uatsole.paraat.ai"
 ENVIRONMENT = "uat"
+#
+# --- LIVE / PRODUCTION (uncomment these two, comment the two above) ---
+# PARAAT_API_BASE = "https://console.paraat.ai"
+# ENVIRONMENT = "production"
 
 # Shared secret guarding the backend health endpoints (X-Health-Token). Must match
 # the backend's health_check.token setting / HEALTH_CHECK_TOKEN. Hardcoded here for
