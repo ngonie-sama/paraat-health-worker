@@ -2,6 +2,9 @@ name = "paraat-health-worker"
 main = "src/index.js"
 compatibility_date = "2025-07-01"
 
+# Elula Online account (pins CLI + Git-connected deploys to the right account).
+account_id = "2f3a54283c593ca9fb546474ca1e5c68"
+
 # Two schedules:
 #   "*/5 * * * *" — cheap reachability pings every 5 minutes (no tokens).
 #   "0 6 * * *"   — the daily real synthetic prompt test (see SYNTHETIC_CRON below).
@@ -38,10 +41,8 @@ MATTERMOST_URL = "https://matter.elula.cloud"
 MATTERMOST_TEAM = "elula-online"
 MATTERMOST_CHANNEL = "town-square"
 
-# Optional: KV namespace enables change-based alerts (only alert on down/recovery
-# transitions instead of every run) and powers the /status last-run view.
-# Create it once:  wrangler kv namespace create HEALTH_STATE
-# then paste the returned id below and uncomment.
-# [[kv_namespaces]]
-# binding = "HEALTH_STATE"
-# id = "REPLACE_WITH_KV_NAMESPACE_ID"
+# KV namespace (Elula Online) — enables change-based alerts (only alert on
+# down/recovery transitions) and powers the /status last-run view.
+[[kv_namespaces]]
+binding = "HEALTH_STATE"
+id = "252cad49eace4a62961c22b69d33f85d"
