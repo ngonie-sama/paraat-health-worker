@@ -14,11 +14,11 @@ crons = ["*/5 * * * *", "0 6 * * *"]
 
 # Non-secret vars. (For production, move PARAAT_HEALTH_TOKEN + CF_AIG_TOKEN to
 # `wrangler secret put <NAME>` — a secret overrides the var of the same name.)
-# NOTE: PARAAT_API_BASE and ENVIRONMENT are intentionally NOT set here — they are
-# per-worker and set as SECRETS in the dashboard (or `wrangler secret put`), so the
-# same repo drives both the dev worker (uatsole.paraat.ai / "uat") and the live
-# worker (console.paraat.ai / "production") with no code change. Secrets survive
-# Git-connected deploys; a plaintext var here would hardcode one environment.
+# NOTE: PARAAT_API_BASE and ENVIRONMENT are intentionally NOT set here — set them
+# as SECRETS on the worker (dashboard or `wrangler secret put`) so the URL isn't
+# hardcoded: point PARAAT_API_BASE at the env you monitor (https://console.paraat.ai
+# for live, https://uatsole.paraat.ai for dev testing). Secrets survive
+# Git-connected deploys; a plaintext var here would pin one environment.
 [vars]
 
 # Shared secret guarding the backend health endpoints (X-Health-Token). Must match
