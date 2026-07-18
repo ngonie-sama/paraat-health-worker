@@ -1,3 +1,4 @@
+<!-- Auto-deploys to Cloudflare (Elula Online) on push to main via Workers Builds. -->
 # Paraat Health Worker
 
 A Cloudflare Worker that monitors the health of every AI endpoint Paraat depends on:
