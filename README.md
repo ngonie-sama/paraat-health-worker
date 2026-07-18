@@ -51,7 +51,7 @@ Status classification:
 
 | Name | Kind | Required | Purpose |
 |------|------|----------|---------|
-| `PARAAT_API_BASE` | var | **yes** | Your backend URL, e.g. `https://dev.paraat.ai`. **Change the placeholder.** |
+| `PARAAT_API_BASE` | **secret** (per-worker) | **yes** | Backend URL for this worker's environment — dev worker: `https://uatsole.paraat.ai`, live worker: `https://console.paraat.ai`. Set as a secret (not in `wrangler.toml`) so one repo serves both. |
 | `PARAAT_HEALTH_TOKEN` | secret | **yes** | Must match the backend's health-check token (Settings → Health Check). |
 | `CF_AIG_TOKEN` | secret | for LLM pings | CF AI Gateway token — same as backend's `CF_AIGETWAY_AIG_AUTH_MAIN`. Enables the provider `/v1/models` pings. |
 | `ALERT_WEBHOOK_URL` | secret | one of these | Incoming webhook (Mattermost/Slack/Discord/Google Chat). **Blank + no bot = no alerts.** |
@@ -62,11 +62,11 @@ Status classification:
 | `RUN_SYNTHETIC` | var | default `true` | Master switch for the real test. |
 | `SYNTHETIC_CRON` | var | default `0 6 * * *` | Which cron trigger runs the real test (keep in sync with `[triggers]`). |
 | `SYNTHETIC_TIMEOUT_MS` | var | default `150000` | Max wait for the synthetic run (MCP agents are slow). |
-| `ENVIRONMENT` | var | optional | Label shown in alerts, e.g. `production`. |
+| `ENVIRONMENT` | secret (per-worker) | optional | Label shown in alerts — `uat` on the dev worker, `production` on the live worker. Set per-worker so it's not hardcoded. |
 
 ## Setup
 
-**Option A — Cloudflare dashboard (deploy from Git):** connect this repo, then fill the variables above in the setup screen. Set `PARAAT_API_BASE` to your real backend URL; leave the optional secrets blank if you don't need them.
+**Option A — Cloudflare dashboard (deploy from Git):** connect this repo and deploy. Then set the per-worker **secrets** (Settings → Variables and Secrets → Encrypt): `PARAAT_API_BASE` (this env's backend URL), `ENVIRONMENT`, `MATTERMOST_TOKEN`, `CF_AIG_TOKEN`. Shared vars (crons, Mattermost URL/team/channel, synthetic settings) come from `wrangler.toml`. Repeat for a second worker pointed at the other environment.
 
 **Option B — CLI:**
 ```bash
