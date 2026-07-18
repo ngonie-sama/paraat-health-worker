@@ -46,6 +46,17 @@ Status classification:
 
 > **Deploy order:** the endpoints only exist once the backend change is merged and deployed to that environment. Point `PARAAT_API_BASE` at an environment **after** it has the code, or every check returns 404.
 
+## Current deployment
+
+- **Worker:** `https://paraat-health-worker.elula.workers.dev` (Cloudflare account **Elula Online**, `2f3a5428…`)
+- **Source:** `elula-online/paraat-health-worker` (`main`) — **auto-deploys on push** via Workers Builds
+- **KV:** `HEALTH_STATE` bound (change-based alerts + `/` status view)
+- **Secrets set:** `PARAAT_API_BASE` = `https://uatsole.paraat.ai` (dev/UAT), `ENVIRONMENT` = `uat`, `CF_AIG_TOKEN`
+- **Not set yet:** `MATTERMOST_TOKEN` → alerts are off until it's set (no spam while the backend endpoints aren't live)
+- **To point at live:** `printf '%s' "https://console.paraat.ai" | wrangler secret put PARAAT_API_BASE` (and set `ENVIRONMENT` = `production`)
+
+> The worker returns HTTP 503 with `health-source returned HTTP 404` until the backend health endpoints (`/api/health/agents`, `/api/health/synthetic`) are deployed to the target URL — those ship in paraat-backend MR #374.
+
 ## Environment variables
 
 > **This worker has its own isolated environment** — it does **not** inherit the Paraat backend's `.env` or the `paraatmaster` worker's secrets. Every value below must be set on *this* worker (Cloudflare dashboard → your Worker → Settings → Variables, or `wrangler secret put`).
@@ -73,11 +84,10 @@ Status classification:
 ```bash
 cd paraat-health-worker
 npm install
-# set PARAAT_API_BASE (+ cron) in wrangler.toml, then:
-wrangler secret put PARAAT_HEALTH_TOKEN
+wrangler secret put PARAAT_API_BASE        # e.g. https://uatsole.paraat.ai (dev) / https://console.paraat.ai (live)
+wrangler secret put ENVIRONMENT            # e.g. uat / production
 wrangler secret put CF_AIG_TOKEN
-wrangler secret put ALERT_WEBHOOK_URL      # optional
-wrangler secret put STATUS_TOKEN           # optional
+wrangler secret put MATTERMOST_TOKEN       # for alerts
 npm run deploy
 ```
 
