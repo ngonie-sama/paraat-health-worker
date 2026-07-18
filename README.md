@@ -51,9 +51,10 @@ Status classification:
 - **Worker:** `https://paraat-health-worker.elula.workers.dev` (Cloudflare account **Elula Online**, `2f3a5428…`)
 - **Source:** `elula-online/paraat-health-worker` (`main`) — **auto-deploys on push** via Workers Builds
 - **KV:** `HEALTH_STATE` bound (change-based alerts + `/` status view)
-- **Secrets set:** `PARAAT_API_BASE` = `https://uatsole.paraat.ai` (dev/UAT), `ENVIRONMENT` = `uat`, `CF_AIG_TOKEN`
+- **Vars (`wrangler.toml`):** `PARAAT_API_BASE` = `https://uatsole.paraat.ai` (dev/UAT), `ENVIRONMENT` = `uat`
+- **Secrets set:** `CF_AIG_TOKEN`
 - **Not set yet:** `MATTERMOST_TOKEN` → alerts are off until it's set (no spam while the backend endpoints aren't live)
-- **To point at live:** `printf '%s' "https://console.paraat.ai" | wrangler secret put PARAAT_API_BASE` (and set `ENVIRONMENT` = `production`)
+- **To point at live:** edit `PARAAT_API_BASE` → `https://console.paraat.ai` and `ENVIRONMENT` → `production` in `wrangler.toml`, then commit + push (auto-deploys)
 
 > The worker returns HTTP 503 with `health-source returned HTTP 404` until the backend health endpoints (`/api/health/agents`, `/api/health/synthetic`) are deployed to the target URL — those ship in paraat-backend MR #374.
 
@@ -63,7 +64,7 @@ Status classification:
 
 | Name | Kind | Required | Purpose |
 |------|------|----------|---------|
-| `PARAAT_API_BASE` | **secret** | **yes** | Backend URL to monitor — `https://console.paraat.ai` (live) or `https://uatsole.paraat.ai` (dev). Set as a secret (not in `wrangler.toml`) so it isn't hardcoded. |
+| `PARAAT_API_BASE` | **var** (`wrangler.toml`) | **yes** | Backend URL to monitor — `https://console.paraat.ai` (live) or `https://uatsole.paraat.ai` (dev). Edit in `wrangler.toml` + push to change. |
 | `PARAAT_HEALTH_TOKEN` | secret | **yes** | Must match the backend's health-check token (Settings → Health Check). |
 | `CF_AIG_TOKEN` | secret | for LLM pings | CF AI Gateway token — same as backend's `CF_AIGETWAY_AIG_AUTH_MAIN`. Enables the provider `/v1/models` pings. |
 | `ALERT_WEBHOOK_URL` | secret | one of these | Incoming webhook (Mattermost/Slack/Discord/Google Chat). **Blank + no bot = no alerts.** |
@@ -74,11 +75,11 @@ Status classification:
 | `RUN_SYNTHETIC` | var | default `true` | Master switch for the real test. |
 | `SYNTHETIC_CRON` | var | default `0 6 * * *` | Which cron trigger runs the real test (keep in sync with `[triggers]`). |
 | `SYNTHETIC_TIMEOUT_MS` | var | default `150000` | Max wait for the synthetic run (MCP agents are slow). |
-| `ENVIRONMENT` | secret | optional | Label shown in alerts (e.g. `production`). Set as a secret so it's not hardcoded. |
+| `ENVIRONMENT` | var (`wrangler.toml`) | optional | Label shown in alerts — `uat` / `production`. |
 
 ## Setup
 
-**Option A — Cloudflare dashboard (deploy from Git):** connect this repo and deploy. Then set the **secrets** (Settings → Variables and Secrets → Encrypt): `PARAAT_API_BASE` (the backend URL you're monitoring), `ENVIRONMENT`, `MATTERMOST_TOKEN`, `CF_AIG_TOKEN`. Everything else (crons, Mattermost URL/team/channel, synthetic settings, KV binding) comes from `wrangler.toml`.
+**Option A — Cloudflare dashboard (deploy from Git):** connect this repo and deploy. Then set the **secrets** (Settings → Variables and Secrets → Encrypt): `CF_AIG_TOKEN` and `MATTERMOST_TOKEN`. Everything non-secret (`PARAAT_API_BASE`, `ENVIRONMENT`, crons, Mattermost URL/team/channel, synthetic settings, KV binding) comes from `wrangler.toml`.
 
 **Option B — CLI:**
 ```bash
