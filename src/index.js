@@ -50,37 +50,47 @@ export default {
 async function runChecks(env, { alert, synthetic = false }) {
   const startedAt = new Date().toISOString();
 
-  let manifest;
+  // The health-source (backend /api/health/agents) is itself a monitored target,
+  // so its up/down flows through the same change-based alerting — no per-run spam.
+  let manifest = null;
+  let sourceErr = null;
   try {
     manifest = await loadTargets(env);
   } catch (err) {
-    const result = {
-      success: false,
-      started_at: startedAt,
-      error: `Failed to load targets: ${err.message}`,
-      summary: { total: 0, up: 0, degraded: 0, down: 1 },
-      results: [],
-    };
-    // A dead health-source is itself an outage worth alerting on.
-    if (alert) await sendAlert(env, formatSourceFailure(env, err));
-    await saveLastRun(env, result);
-    return result;
+    sourceErr = err;
   }
 
-  const gateway = manifest.gateway || {};
-  const probes = [
-    ...(manifest.providers || []).map((p) => providerProbe(gateway, p, env)),
-    ...(manifest.rag_endpoints || []).map((r) => directProbe(r, env)),
-    ...(manifest.mcp_endpoints || []).map((r) => directProbe(r, env)),
-  ];
+  const sourceResult = {
+    id: 'health-source',
+    name: 'Backend health-source',
+    provider: 'backend',
+    kind: 'source',
+    via: 'source',
+    test: 'ping',
+    status: sourceErr ? 'down' : 'up',
+    http_status: null,
+    latency_ms: null,
+    note: sourceErr ? sourceErr.message : 'ok',
+  };
 
-  const pingResults = (await Promise.all(probes.map((p) => runProbe(p)))).map((r) => ({ ...r, test: 'ping' }));
+  let results = [sourceResult];
 
-  // Real end-to-end user test — the thing a ping can't prove. Runs only on the
-  // daily cron (or on-demand via ?synthetic=1).
-  const syntheticResults = synthetic ? await runSynthetic(env) : [];
+  // Only probe the agents if we actually got the target list.
+  if (!sourceErr) {
+    const gateway = manifest.gateway || {};
+    const probes = [
+      ...(manifest.providers || []).map((p) => providerProbe(gateway, p, env)),
+      ...(manifest.rag_endpoints || []).map((r) => directProbe(r, env)),
+      ...(manifest.mcp_endpoints || []).map((r) => directProbe(r, env)),
+    ];
+    const pingResults = (await Promise.all(probes.map((p) => runProbe(p)))).map((r) => ({ ...r, test: 'ping' }));
 
-  const results = [...pingResults, ...syntheticResults];
+    // Real end-to-end user test — the thing a ping can't prove. Runs only on the
+    // daily cron (or on-demand via ?synthetic=1).
+    const syntheticResults = synthetic ? await runSynthetic(env) : [];
+
+    results = [sourceResult, ...pingResults, ...syntheticResults];
+  }
 
   const summary = results.reduce(
     (acc, r) => {
@@ -92,7 +102,7 @@ async function runChecks(env, { alert, synthetic = false }) {
   );
 
   const result = {
-    success: true,
+    success: !sourceErr && summary.down === 0,
     started_at: startedAt,
     finished_at: new Date().toISOString(),
     source: `${trimSlash(env.PARAAT_API_BASE)}/api/health/agents`,
@@ -100,6 +110,7 @@ async function runChecks(env, { alert, synthetic = false }) {
     results,
   };
 
+  // Everything (including the health-source) goes through change-based alerting.
   if (alert) await handleAlerts(env, results);
   await saveLastRun(env, result);
   return result;
@@ -266,7 +277,7 @@ async function attempt(probe) {
       fetch(probe.url, { method: probe.method, headers: probe.headers, signal })
     );
     const latency = Date.now() - t0;
-    return { status: classify(res.status), http_status: res.status, latency_ms: latency, note: noteFor(res.status) };
+    return { status: classify(res.status, probe.via), http_status: res.status, latency_ms: latency, note: noteFor(res.status, probe.via) };
   } catch (err) {
     const latency = Date.now() - t0;
     const timedOut = err.name === 'AbortError';
@@ -276,18 +287,28 @@ async function attempt(probe) {
 
 /**
  * up       — endpoint answered normally (2xx/3xx) or with an expected client
- *            response (400/404/405) proving reachability of a POST-only route.
- * degraded — reachable but auth/quota problem (401/403/429).
+ *            response proving reachability.
+ * degraded — reachable but a real auth/quota problem.
  * down     — server error (5xx) or no answer (network/timeout).
+ *
+ * Context matters: for a `gateway` provider probe, 401/403 means the AI-Gateway
+ * token/key is genuinely wrong → degraded. For a `direct` RAG/MCP endpoint, a
+ * bare GET to an auth-gated or POST-only route returns 401/403/404/405 even when
+ * the service is perfectly healthy → that's just "reachable" (up).
  */
-function classify(httpStatus) {
+function classify(httpStatus, via = 'gateway') {
   if (httpStatus >= 500) return 'down';
-  if (httpStatus === 401 || httpStatus === 403 || httpStatus === 429) return 'degraded';
+  if (httpStatus === 429) return 'degraded'; // rate limited (either context)
+  if (httpStatus === 401 || httpStatus === 403) {
+    return via === 'gateway' ? 'degraded' : 'up'; // direct endpoints: auth-gated GET = reachable
+  }
   return 'up';
 }
 
-function noteFor(httpStatus) {
-  if (httpStatus === 401 || httpStatus === 403) return 'auth rejected (check gateway token / provider key)';
+function noteFor(httpStatus, via = 'gateway') {
+  if (httpStatus === 401 || httpStatus === 403) {
+    return via === 'gateway' ? 'auth rejected (check gateway token)' : 'reachable (auth-gated)';
+  }
   if (httpStatus === 429) return 'rate limited';
   if (httpStatus >= 500) return 'upstream server error';
   if (httpStatus === 404 || httpStatus === 405 || httpStatus === 400) return 'reachable';
