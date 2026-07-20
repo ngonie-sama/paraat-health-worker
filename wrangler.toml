@@ -5,12 +5,13 @@ compatibility_date = "2025-07-01"
 # Elula Online account (pins CLI + Git-connected deploys to the right account).
 account_id = "2f3a54283c593ca9fb546474ca1e5c68"
 
-# Two schedules:
-#   "*/5 * * * *" — cheap reachability pings every 5 minutes (no tokens).
+# Two schedules (UTC):
+#   "0 */2 * * *" — reachability pings every 2 hours (no tokens; detects outages
+#                   within ~2h). Tighten to "*/5 * * * *" for near-real-time.
 #   "0 6 * * *"   — the daily real synthetic prompt test (see SYNTHETIC_CRON below).
-# Both are UTC. Change "0 6 * * *" to move the daily run; keep SYNTHETIC_CRON in sync.
+# Change "0 6 * * *" to move the daily run; keep SYNTHETIC_CRON in sync.
 [triggers]
-crons = ["*/5 * * * *", "0 6 * * *"]
+crons = ["0 */2 * * *", "0 6 * * *"]
 
 # Non-secret vars — edit here + push (auto-deploys). Real secrets
 # (CF_AIG_TOKEN, MATTERMOST_TOKEN) stay as `wrangler secret put`.
