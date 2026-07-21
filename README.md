@@ -112,7 +112,11 @@ npm run dev
 
 ## Alerts
 
-Two ways to deliver alerts — pick one:
+**When it posts:** change-based, plus a daily heartbeat.
+- **On change** — any run (every 2h ping, or the daily synthetic) posts only when a target flips `up ↔ down/degraded`. Healthy + unchanged = silent, so no noise.
+- **Daily heartbeat** — the daily `SYNTHETIC_CRON` run **always** posts a compact digest ("🩺 daily digest — N up · N degraded · N down", green when all up, or a table of just the problem targets). This doubles as a proof-of-life signal. Force one on demand with `GET /?synthetic=1&alert=1`.
+
+Two ways to deliver — pick one:
 
 **A) Mattermost bot (reuses your existing bot — no webhook needed)**
 Set `MATTERMOST_TOKEN` (secret) plus `MATTERMOST_URL`, `MATTERMOST_TEAM`, `MATTERMOST_CHANNEL` (vars). The worker posts via `POST /api/v4/posts` as the bot. `MATTERMOST_CHANNEL` can be a 26-char channel id or a channel name (resolved via team). The bot must be a member of the channel.

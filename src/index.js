@@ -21,7 +21,9 @@ export default {
     // Two cron triggers: the frequent one runs cheap pings only; the daily one
     // (SYNTHETIC_CRON) additionally runs the real, token-spending synthetic test.
     const synthetic = String(env.RUN_SYNTHETIC) !== 'false' && event.cron === (env.SYNTHETIC_CRON || '0 6 * * *');
-    ctx.waitUntil(runChecks(env, { alert: true, synthetic }));
+    // The daily (synthetic) cron also posts a heartbeat digest — proof-of-life +
+    // full status — even when nothing changed. The 2h ping cron stays change-only.
+    ctx.waitUntil(runChecks(env, { alert: true, synthetic, heartbeat: synthetic }));
   },
 
   async fetch(request, env) {
@@ -35,11 +37,11 @@ export default {
       }
     }
 
-    // On-demand: add ?synthetic=1 to also run the real prompt test.
-    const result = await runChecks(env, {
-      alert: url.searchParams.get('alert') === '1',
-      synthetic: url.searchParams.get('synthetic') === '1',
-    });
+    // On-demand: ?synthetic=1 also runs the real prompt test; add &alert=1 to
+    // post the same daily-style digest (handy to force a fresh all-clear).
+    const synthetic = url.searchParams.get('synthetic') === '1';
+    const alert = url.searchParams.get('alert') === '1';
+    const result = await runChecks(env, { alert, synthetic, heartbeat: synthetic && alert });
     const anyDown = result.summary.down > 0 || result.summary.degraded > 0;
     return json(result, anyDown ? 503 : 200);
   },
@@ -47,7 +49,7 @@ export default {
 
 // ── Core ─────────────────────────────────────────────────────────────────────
 
-async function runChecks(env, { alert, synthetic = false }) {
+async function runChecks(env, { alert, synthetic = false, heartbeat = false }) {
   const startedAt = new Date().toISOString();
 
   // The health-source (backend /api/health/agents) is itself a monitored target,
@@ -111,7 +113,8 @@ async function runChecks(env, { alert, synthetic = false }) {
   };
 
   // Everything (including the health-source) goes through change-based alerting.
-  if (alert) await handleAlerts(env, results);
+  // On a heartbeat run (daily), also post the full digest even when unchanged.
+  if (alert) await handleAlerts(env, results, { heartbeat });
   await saveLastRun(env, result);
   return result;
 }
@@ -321,12 +324,14 @@ function rank(status) {
 
 // ── Alerting (change-based when KV is bound, else on any outage) ──────────────
 
-async function handleAlerts(env, results) {
+async function handleAlerts(env, results, { heartbeat = false } = {}) {
   const bad = results.filter((r) => r.status !== 'up');
 
   if (!env.HEALTH_STATE) {
-    // No KV → cannot track transitions; alert whenever something is bad.
-    if (bad.length) await sendAlert(env, formatAlert(bad, [], env));
+    // No KV → cannot track transitions; post the digest on a heartbeat run,
+    // otherwise alert whenever something is bad.
+    if (heartbeat) await sendAlert(env, formatHeartbeat(results, env));
+    else if (bad.length) await sendAlert(env, formatAlert(bad, [], env));
     return;
   }
 
@@ -342,10 +347,34 @@ async function handleAlerts(env, results) {
     if (r.status === 'up' && was && was !== 'up') recovered.push(r);
   }
 
-  if (newlyBad.length || recovered.length) {
+  if (heartbeat) {
+    // Daily digest: always post the full status, even when nothing changed.
+    await sendAlert(env, formatHeartbeat(results, env));
+  } else if (newlyBad.length || recovered.length) {
     await sendAlert(env, formatAlert(newlyBad, recovered, env));
   }
   await env.HEALTH_STATE.put('state', JSON.stringify(next));
+}
+
+// Daily heartbeat: a compact "it ran + here's the state" digest. Green when all
+// up; lists only the problem targets otherwise.
+function formatHeartbeat(results, env) {
+  const env_ = env.ENVIRONMENT ? ` [${env.ENVIRONMENT}]` : '';
+  const s = results.reduce(
+    (a, r) => { a.total++; a[r.status] = (a[r.status] || 0) + 1; return a; },
+    { total: 0, up: 0, degraded: 0, down: 0 }
+  );
+  const head = `🩺 **Paraat endpoint health — daily digest**${env_}\n**${s.up} up · ${s.degraded} degraded · ${s.down} down** (${s.total} checks)`;
+
+  const bad = results.filter((r) => r.status !== 'up');
+  if (!bad.length) return `${head} — all systems green ✅`;
+
+  const rows = bad.map((r) => {
+    const emoji = r.status === 'down' ? '🔴' : '🟠';
+    const tag = r.test === 'synthetic' ? ' ⚠️' : '';
+    return `| ${emoji}${tag} | ${cell(r.name)} | ${cell(r.provider + '/' + r.kind)} | ${cell((r.http_status ?? '—') + ' · ' + r.note)} |`;
+  });
+  return [head, '', '| | Agent | Type | Detail |', '|:--:|---|---|---|', ...rows].join('\n');
 }
 
 async function sendAlert(env, text) {
